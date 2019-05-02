@@ -44,7 +44,8 @@ def add_extras(cfg, i, size=300):
         layers.append(nn.Conv2d(128, 256, kernel_size=4, stride=1, padding=1))
     return layers
 
-
+# Todo:
+# refine regression+classification header, add centerness header
 def add_header(vgg, extra_layers, boxes_per_location, num_classes):
     regression_headers = []
     classification_headers = []
