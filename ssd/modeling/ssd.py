@@ -14,7 +14,8 @@ class SSD(nn.Module):
                  vgg: nn.ModuleList,
                  extras: nn.ModuleList,
                  classification_headers: nn.ModuleList,
-                 regression_headers: nn.ModuleList):
+                 regression_headers: nn.ModuleList,
+                 centerness_headers: nn.ModuleList):
         """Compose a SSD model using the given components.
         """
         super(SSD, self).__init__()
@@ -25,6 +26,7 @@ class SSD(nn.Module):
         self.classification_headers = classification_headers
         self.regression_headers = regression_headers
         self.l2_norm = L2Norm(512, scale=20)
+        # add fcos loss evaluator
         self.criterion = MultiBoxLoss(neg_pos_ratio=cfg.MODEL.NEG_POS_RATIO)
         self.priors = None
         self.reset_parameters()
@@ -44,6 +46,7 @@ class SSD(nn.Module):
         sources = []
         confidences = []
         locations = []
+        centerness = []
         for i in range(23):
             x = self.vgg[i](x)
         s = self.l2_norm(x)  # Conv4_3 L2 normalization
@@ -59,21 +62,24 @@ class SSD(nn.Module):
             if k % 2 == 1:
                 sources.append(x)
 
-        for (x, l, c) in zip(sources, self.regression_headers, self.classification_headers):
+        for (x, l, c) in zip(sources, self.regression_headers, self.classification_headers, self.centerness_headers):
             locations.append(l(x).permute(0, 2, 3, 1).contiguous())
             confidences.append(c(x).permute(0, 2, 3, 1).contiguous())
+            centerness.append(c(x).permute(0, 2, 3, 1).contiguous())
 
         confidences = torch.cat([o.view(o.size(0), -1) for o in confidences], 1)
         locations = torch.cat([o.view(o.size(0), -1) for o in locations], 1)
+        centerness = torch.cat([o.view(o.size(0), -1) for o in centerness], 1)
 
         confidences = confidences.view(confidences.size(0), -1, self.num_classes)
         locations = locations.view(locations.size(0), -1, 4)
+        centerness = centerness.view(centerness.size(0), -1, 1)
 
         if not self.training:
             # when evaluating, decode predictions
-            if self.priors is None:
-                self.priors = PriorBox(self.cfg)().to(locations.device)
+            # remove priors
             confidences = F.softmax(confidences, dim=2)
+            # map prediction to boxes
             boxes = box_utils.convert_locations_to_boxes(
                 locations, self.priors, self.cfg.MODEL.CENTER_VARIANCE, self.cfg.MODEL.SIZE_VARIANCE
             )
@@ -82,10 +88,12 @@ class SSD(nn.Module):
         else:
             # when training, compute losses
             gt_boxes, gt_labels = targets
-            regression_loss, classification_loss = self.criterion(confidences, locations, gt_labels, gt_boxes)
+            regression_loss, classification_loss, centerness_loss = self.criterion(confidences, locations, centerness,
+                                                                                   gt_labels, gt_boxes)
             loss_dict = dict(
                 regression_loss=regression_loss,
                 classification_loss=classification_loss,
+                centerness_loss=centerness_loss
             )
             return loss_dict
 
