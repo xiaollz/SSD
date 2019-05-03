@@ -45,22 +45,22 @@ def add_extras(cfg, i, size=300):
     return layers
 
 # Todo:
-# refine regression+classification header, add centerness header
-def add_header(vgg, extra_layers, boxes_per_location, num_classes):
+# regression head not in exp space
+def add_header(vgg, extra_layers, num_classes):
     regression_headers = []
     classification_headers = []
+    certerness_headers = []
     vgg_source = [21, -2]
     for k, v in enumerate(vgg_source):
         regression_headers += [nn.Conv2d(vgg[v].out_channels,
-                                         boxes_per_location[k] * 4, kernel_size=3, padding=1)]
-        classification_headers += [nn.Conv2d(vgg[v].out_channels,
-                                             boxes_per_location[k] * num_classes, kernel_size=3, padding=1)]
+                                         4, kernel_size=3, padding=1)]
+        classification_headers += [nn.Conv2d(vgg[v].out_channels, num_classes, kernel_size=3, padding=1)]
+        centerness_headers += [nn.Conv2d(vgg[v].out_channels, 1, kernel_size=3, padding=1)]
     for k, v in enumerate(extra_layers[1::2], 2):
-        regression_headers += [nn.Conv2d(v.out_channels, boxes_per_location[k]
-                                         * 4, kernel_size=3, padding=1)]
-        classification_headers += [nn.Conv2d(v.out_channels, boxes_per_location[k]
-                                             * num_classes, kernel_size=3, padding=1)]
-    return regression_headers, classification_headers
+        regression_headers += [nn.Conv2d(v.out_channels, 4, kernel_size=3, padding=1)]
+        classification_headers += [nn.Conv2d(v.out_channels, num_classes, kernel_size=3, padding=1)]
+        centerness_headers += [nn.Conv2d(v.out_channels, 1, kernel_size=3, padding=1)]
+    return regression_headers, classification_headers, certerness_headers
 
 
 def build_ssd_model(cfg):
@@ -77,20 +77,20 @@ def build_ssd_model(cfg):
         '512': [256, 'S', 512, 128, 'S', 256, 128, 'S', 256, 128, 'S', 256],
     }
 
-    boxes_per_location = cfg.MODEL.PRIORS.BOXES_PER_LOCATION
-
     vgg_config = vgg_base[str(size)]
     extras_config = extras_base[str(size)]
 
     vgg = nn.ModuleList(add_vgg(vgg_config))
     extras = nn.ModuleList(add_extras(extras_config, i=1024, size=size))
 
-    regression_headers, classification_headers = add_header(vgg, extras, boxes_per_location, num_classes=num_classes)
+    regression_headers, classification_headers, certerness_headers = add_header(vgg, extras, num_classes=num_classes)
     regression_headers = nn.ModuleList(regression_headers)
     classification_headers = nn.ModuleList(classification_headers)
+    certerness_headers = nn.ModuleList(certerness_headers)
 
     return SSD(cfg=cfg,
                vgg=vgg,
                extras=extras,
                classification_headers=classification_headers,
-               regression_headers=regression_headers)
+               regression_headers=regression_headers,
+               certerness_headers=certerness_headers)
