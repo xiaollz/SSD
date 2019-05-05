@@ -8,6 +8,9 @@ from ssd.module import L2Norm
 from ssd.module.prior_box import PriorBox
 from ssd.utils import box_utils
 
+from ssd.modeling.ssd_fcos_loss import make_fcos_loss_evaluator
+from ssd.modeling.fcos_inference import make_fcos_postprocessor
+
 
 class SSD(nn.Module):
     def __init__(self, cfg,
@@ -25,11 +28,15 @@ class SSD(nn.Module):
         self.extras = extras
         self.classification_headers = classification_headers
         self.regression_headers = regression_headers
+        self.centerness_headers = centerness_headers
         self.l2_norm = L2Norm(512, scale=20)
-        # add fcos loss evaluator
-        self.criterion = MultiBoxLoss(neg_pos_ratio=cfg.MODEL.NEG_POS_RATIO)
-        self.priors = None
         self.reset_parameters()
+
+        # add evaluator & inference
+        loss_evaluator = make_fcos_loss_evaluator(cfg)
+        self.loss_evaluator = loss_evaluator
+        box_selector_test = make_fcos_postprocessor(cfg)
+        self.box_selector_test = box_selector_test
 
     def reset_parameters(self):
         def weights_init(m):
@@ -41,6 +48,7 @@ class SSD(nn.Module):
         self.extras.apply(weights_init)
         self.classification_headers.apply(weights_init)
         self.regression_headers.apply(weights_init)
+        self.centerness_headers.apply(weights_init)
 
     def forward(self, x, targets=None):
         sources = []
@@ -61,11 +69,15 @@ class SSD(nn.Module):
             x = F.relu(v(x), inplace=True)
             if k % 2 == 1:
                 sources.append(x)
+        
+        # add points computation, here, points as locations in fcos.py
+        points = self.compute_locations(sources)
 
-        for (x, l, c) in zip(sources, self.regression_headers, self.classification_headers, self.centerness_headers):
+        for (x, l, c, ct) in zip(sources, self.regression_headers, self.classification_headers,
+                                self.centerness_headers):
             locations.append(l(x).permute(0, 2, 3, 1).contiguous())
             confidences.append(c(x).permute(0, 2, 3, 1).contiguous())
-            centerness.append(c(x).permute(0, 2, 3, 1).contiguous())
+            centerness.append(ct(x).permute(0, 2, 3, 1).contiguous())
 
         confidences = torch.cat([o.view(o.size(0), -1) for o in confidences], 1)
         locations = torch.cat([o.view(o.size(0), -1) for o in locations], 1)
@@ -73,29 +85,53 @@ class SSD(nn.Module):
 
         confidences = confidences.view(confidences.size(0), -1, self.num_classes)
         locations = locations.view(locations.size(0), -1, 4)
-        centerness = centerness.view(centerness.size(0), -1, 1)
-
+        centerness = centerness.view(locations.size(0), -1, 1)
+        
+        # fcos inference & loss
         if not self.training:
             # when evaluating, decode predictions
-            # remove priors
             confidences = F.softmax(confidences, dim=2)
-            # map prediction to boxes
             boxes = box_utils.convert_locations_to_boxes(
                 locations, self.priors, self.cfg.MODEL.CENTER_VARIANCE, self.cfg.MODEL.SIZE_VARIANCE
             )
             boxes = box_utils.center_form_to_corner_form(boxes)
-            return confidences, boxes
+            return boxes, {} # mind the return value
         else:
             # when training, compute losses
-            gt_boxes, gt_labels = targets
-            regression_loss, classification_loss, centerness_loss = self.criterion(confidences, locations, centerness,
-                                                                                   gt_labels, gt_boxes)
+            regression_loss, classification_loss, centerness_loss = 
+                            self.loss_evaluator(points, confidences, locations, centerness, targets)
             loss_dict = dict(
                 regression_loss=regression_loss,
                 classification_loss=classification_loss,
                 centerness_loss=centerness_loss
             )
-            return loss_dict
+            return None, loss_dict
+    
+    def compute_locations(self, features):
+    locations = []
+    for level, feature in enumerate(features):
+        h, w = feature.size()[-2:]
+        locations_per_level = self.compute_locations_per_level(
+            h, w, self.cfg.STRIDES[level], # add STRIDES in config
+            feature.device
+        )
+        locations.append(locations_per_level)
+    return locations
+
+    def compute_locations_per_level(self, h, w, stride, device):
+        shifts_x = torch.arange(
+            0, w * stride, step=stride,
+            dtype=torch.float32, device=device
+        )
+        shifts_y = torch.arange(
+            0, h * stride, step=stride,
+            dtype=torch.float32, device=device
+        )
+        shift_y, shift_x = torch.meshgrid(shifts_y, shifts_x)
+        shift_x = shift_x.reshape(-1)
+        shift_y = shift_y.reshape(-1)
+        locations = torch.stack((shift_x, shift_y), dim=1) + stride // 2
+        return locations
 
     def init_from_base_net(self, model):
         vgg_weights = torch.load(model, map_location=lambda storage, loc: storage)
@@ -106,23 +142,3 @@ class SSD(nn.Module):
 
     def save(self, model_path):
         torch.save(self.state_dict(), model_path)
-
-
-class MatchPrior(object):
-    def __init__(self, center_form_priors, center_variance, size_variance, iou_threshold):
-        self.center_form_priors = center_form_priors
-        self.corner_form_priors = box_utils.center_form_to_corner_form(center_form_priors)
-        self.center_variance = center_variance
-        self.size_variance = size_variance
-        self.iou_threshold = iou_threshold
-
-    def __call__(self, gt_boxes, gt_labels):
-        if type(gt_boxes) is np.ndarray:
-            gt_boxes = torch.from_numpy(gt_boxes)
-        if type(gt_labels) is np.ndarray:
-            gt_labels = torch.from_numpy(gt_labels)
-        boxes, labels = box_utils.assign_priors(gt_boxes, gt_labels,
-                                                self.corner_form_priors, self.iou_threshold)
-        boxes = box_utils.corner_form_to_center_form(boxes)
-        locations = box_utils.convert_boxes_to_locations(boxes, self.center_form_priors, self.center_variance, self.size_variance)
-        return locations, labels
