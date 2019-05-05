@@ -5,7 +5,7 @@ from .data_preprocessing import PredictionTransform
 from ssd.structures.bounding_box import BoxList
 
 class Predictor:
-    def __init__(self, cfg, model, iou_threshold, score_threshold, device):
+    def __init__(self, cfg, model, device):
         self.cfg = cfg
         self.model = model
         self.transform = PredictionTransform(cfg.INPUT.IMAGE_SIZE, cfg.INPUT.PIXEL_MEAN)
