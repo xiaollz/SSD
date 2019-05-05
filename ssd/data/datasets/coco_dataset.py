@@ -22,12 +22,11 @@ class COCODataset(torch.utils.data.Dataset):
                    'refrigerator', 'book', 'clock', 'vase', 'scissors',
                    'teddy bear', 'hair drier', 'toothbrush')
 
-    def __init__(self, data_dir, ann_file, transform=None, target_transform=None, remove_empty=False):
+    def __init__(self, data_dir, ann_file, transform=None, remove_empty=False):
         from pycocotools.coco import COCO
         self.coco = COCO(ann_file)
         self.data_dir = data_dir
         self.transform = transform
-        self.target_transform = target_transform
         self.remove_empty = remove_empty
         if self.remove_empty:
             # when training, images without annotations are removed.
@@ -45,8 +44,6 @@ class COCODataset(torch.utils.data.Dataset):
         image = self._read_image(image_id)
         if self.transform:
             image, boxes, labels = self.transform(image, boxes, labels)
-        if self.target_transform:
-            boxes, labels = self.target_transform(boxes, labels)
         return image, boxes, labels
 
     def get_image(self, index):
