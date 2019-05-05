@@ -2,6 +2,7 @@ import torch
 
 from .data_preprocessing import PredictionTransform
 
+from ssd.structures.bounding_box import BoxList
 
 class Predictor:
     def __init__(self, cfg, model, iou_threshold, score_threshold, device):
@@ -19,5 +20,5 @@ class Predictor:
         with torch.no_grad():
             boxes = self.model(images)
         results = boxes
-        boxes, labels, scores = results[0]
+        boxes, labels, scores = results.bbox, results.get_field('labels'), results.get_field('scores')
         return boxes, labels, scores
