@@ -8,7 +8,7 @@ from ssd.module import L2Norm
 from ssd.module.prior_box import PriorBox
 from ssd.utils import box_utils
 
-from ssd.modeling.ssd_fcos_loss import make_fcos_loss_evaluator
+from ssd.modeling.fcos_loss import make_fcos_loss_evaluator
 from ssd.modeling.fcos_inference import make_fcos_postprocessor
 
 
