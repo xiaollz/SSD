@@ -13,7 +13,7 @@ from ssd.utils import distributed_util
 
 
 def _accumulate_predictions_from_multiple_gpus(predictions_per_gpu):
-    all_predictions = distributed_util.all_gather(predictions_per_gpu)
+    all_predictions = distributed_util.scatter_gather(predictions_per_gpu)
     if not distributed_util.is_main_process():
         return
     # merge the list of dicts
@@ -83,15 +83,10 @@ def do_evaluation(cfg, model, output_dir, distributed):
     model.eval()
     predictor = Predictor(cfg=cfg,
                           model=model,
-                          iou_threshold=cfg.TEST.NMS_THRESHOLD,
-                          score_threshold=cfg.TEST.CONFIDENCE_THRESHOLD,
                           device=device)
     # evaluate all test datasets.
     logger = logging.getLogger("SSD.inference")
     logger.info('Will evaluate {} dataset(s):'.format(len(test_datasets)))
-    metrics = {}
     for dataset_name, test_dataset in zip(cfg.DATASETS.TEST, test_datasets):
-        metric = _evaluation(cfg, dataset_name, test_dataset, predictor, distributed, output_dir)
-        metrics[dataset_name] = metric
+        _evaluation(cfg, dataset_name, test_dataset, predictor, distributed, output_dir)
         distributed_util.synchronize()
-    return metrics
