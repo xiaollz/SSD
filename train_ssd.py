@@ -57,8 +57,7 @@ def train(cfg, args):
     # Dataset
     # -----------------------------------------------------------------------------
     train_transform = TrainAugmentation(cfg.INPUT.IMAGE_SIZE, cfg.INPUT.PIXEL_MEAN)
-    target_transform = MatchPrior(PriorBox(cfg)(), cfg.MODEL.CENTER_VARIANCE, cfg.MODEL.SIZE_VARIANCE, cfg.MODEL.THRESHOLD)
-    train_dataset = build_dataset(dataset_list=cfg.DATASETS.TRAIN, transform=train_transform, target_transform=target_transform)
+    train_dataset = build_dataset(dataset_list=cfg.DATASETS.TRAIN, transform=train_transform)
     logger.info("Train dataset size: {}".format(len(train_dataset)))
     if args.distributed:
         sampler = torch.utils.data.DistributedSampler(train_dataset)
