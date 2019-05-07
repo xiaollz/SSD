@@ -1,12 +1,11 @@
 MODEL:
   NUM_CLASSES: 81
   FCOS_ON: True
-  STRIDES: [8,16,32,64,128,256]
 INPUT:
   IMAGE_SIZE: 512
 DATASETS:
   TRAIN: ("coco_2017_train")
-  TEST: ("coco_2017_val", )
+  TEST: ("coco_2017_val")
 SOLVER:
   MAX_ITER: 400000
   LR_STEPS: [280000, 360000]
