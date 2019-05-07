@@ -7,9 +7,9 @@ import torch
 from torch.nn import functional as F
 from torch import nn
 
-from maskrcnn_benchmark.layers import IOULoss
-from maskrcnn_benchmark.layers import SigmoidFocalLoss
-from maskrcnn_benchmark.modeling.utils import cat
+from ssd.module import IOULoss
+from ssd.module import SigmoidFocalLoss
+from ssd.utils import cat
 
 
 INF = 100000000
