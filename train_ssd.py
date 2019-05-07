@@ -12,9 +12,7 @@ from ssd.data.datasets import build_dataset
 from ssd.engine.inference import do_evaluation
 from ssd.engine.trainer import do_train
 from ssd.modeling.data_preprocessing import TrainAugmentation
-from ssd.modeling.ssd import MatchPrior
 from ssd.modeling.vgg_ssd import build_ssd_model
-from ssd.module.prior_box import PriorBox
 from ssd.utils import distributed_util
 from ssd.utils.logger import setup_logger
 from ssd.utils.lr_scheduler import WarmupMultiStepLR
