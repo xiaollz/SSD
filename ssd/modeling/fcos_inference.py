@@ -1,7 +1,7 @@
 import torch
 
-from ..rpn_inference import RPNPostProcessor
-from ..utils import permute_and_flatten
+from .rpn_inference import RPNPostProcessor
+from .utils import permute_and_flatten
 
 from ssd.utils import BoxCoder
 from ssd.utils import cat
