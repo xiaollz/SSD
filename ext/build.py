@@ -1,3 +1,6 @@
+#export LD_LIBRARY_PATH=/usr/local/cuda-8.0/lib64
+#export CUDA_HOME=/usr/local/cuda-8.0
+
 import glob
 import os
 
