@@ -1,14 +1,14 @@
 import torch
 
-from ..inference import RPNPostProcessor
+from ..rpn_inference import RPNPostProcessor
 from ..utils import permute_and_flatten
 
-from maskrcnn_benchmark.modeling.box_coder import BoxCoder
-from maskrcnn_benchmark.modeling.utils import cat
-from maskrcnn_benchmark.structures.bounding_box import BoxList
-from maskrcnn_benchmark.structures.boxlist_ops import cat_boxlist
-from maskrcnn_benchmark.structures.boxlist_ops import boxlist_nms
-from maskrcnn_benchmark.structures.boxlist_ops import remove_small_boxes
+from ssd.utils import BoxCoder
+from ssd.utils import cat
+from ssd.structures.bounding_box import BoxList
+from ssd.structures.boxlist_ops import cat_boxlist
+from ssd.structures.boxlist_ops import boxlist_nms
+from ssd.structures.boxlist_ops import remove_small_boxes
 
 
 class FCOSPostProcessor(torch.nn.Module):
